@@ -54,6 +54,7 @@ cd voyager/env/mineflayer
 npm install -g npx
 npm install
 cd mineflayer-collectblock
+npm install
 npx tsc
 cd ..
 npm install
@@ -102,6 +103,30 @@ voyager.learn()
   2. Set Game Mode to `Creative` and Difficulty to `Peaceful`.
   3. After the world is created, press `Esc` key and press `Open to LAN`.
   4. Select `Allow cheats: ON` and press `Start LAN World`. You will see the bot join the world soon. 
+
+## Option 3: Run a dedicated Minecraft server
+Install the Fabric minecraft server following the instructions at https://fabricmc.net/use/server/, or use the below:
+```
+curl -OJ https://meta.fabricmc.net/v2/versions/loader/1.19/0.14.18/0.11.2/server/jar
+java -Xmx2G -jar fabric-server-mc.1.19-loader.0.14.18-launcher.0.11.2.jar nogui
+```
+
+This will start the server, creating the necessary folder structure. You should now kill the server by typing `stop`
+
+You should now copy the mods into the mods directory as per https://github.com/MineDojo/Voyager/blob/main/installation/fabric_mods_install.md
+
+Edit the `server.properties` file, changing the following values
+```
+difficulty=peaceful
+gamemode=survival
+online-mode=false
+enable-rcon=true # Only needed if you wish to use RCON features
+rcon.password=hunter2
+rcon.port=25575
+spawn-protection=0 # This is important, otherwise the bot can't do anything near the spawn
+```
+
+You can now start the server again. Now you can start Voyager, and have it connect with `mc_port=25565`. Once `bot` has joined the minecraft server, run `op bot` in the minecraft server console.
 
 # Resume from a checkpoint during learning
 
