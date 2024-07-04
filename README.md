@@ -1,4 +1,5 @@
 # Voyager: An Open-Ended Embodied Agent with Large Language Models
+
 <div align="center">
 
 [[Website]](https://voyager.minedojo.org/)
@@ -8,13 +9,12 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.9-blue.svg)](https://github.com/MineDojo/Voyager)
 [![GitHub license](https://img.shields.io/github/license/MineDojo/Voyager)](https://github.com/MineDojo/Voyager/blob/main/LICENSE)
-______________________________________________________________________
 
+---
 
 https://github.com/MineDojo/Voyager/assets/25460983/ce29f45b-43a5-4399-8fd8-5dd105fd64f2
 
 ![](images/pull.png)
-
 
 </div>
 
@@ -38,17 +38,22 @@ solve novel tasks from scratch, while other techniques struggle to generalize.
 In this repo, we provide Voyager code. This codebase is under [MIT License](LICENSE).
 
 # Installation
+
 Voyager requires Python ≥ 3.9 and Node.js ≥ 16.13.0. We have tested on Ubuntu 20.04, Windows 11, and macOS. You need to follow the instructions below to install Voyager.
 
 ## Python Install
+
 ```
 git clone https://github.com/MineDojo/Voyager
 cd Voyager
+pip install --only-binary=:all: cchardet
 pip install -e .
 ```
 
 ## Node.js Install
+
 In addition to the Python dependencies, you need to install the following Node.js packages:
+
 ```
 cd voyager/env/mineflayer
 npm install -g npx
@@ -68,14 +73,16 @@ Follow the instructions in [Minecraft Login Tutorial](installation/minecraft_ins
 
 ## Fabric Mods Install
 
-You need to install fabric mods to support all the features in Voyager. Remember to use the correct Fabric version of all the mods. 
+You need to install fabric mods to support all the features in Voyager. Remember to use the correct Fabric version of all the mods.
 
 Follow the instructions in [Fabric Mods Install](installation/fabric_mods_install.md) to install the mods.
 
 # Getting Started
+
 Voyager uses OpenAI's GPT-4 as the language model. You need to have an OpenAI API key to use Voyager. You can get one from [here](https://platform.openai.com/account/api-keys).
 
 After the installation process, you can run Voyager by:
+
 ```python
 from voyager import Voyager
 
@@ -102,10 +109,12 @@ voyager.learn()
   1. Select `Singleplayer` and press `Create New World`.
   2. Set Game Mode to `Creative` and Difficulty to `Peaceful`.
   3. After the world is created, press `Esc` key and press `Open to LAN`.
-  4. Select `Allow cheats: ON` and press `Start LAN World`. You will see the bot join the world soon. 
+  4. Select `Allow cheats: ON` and press `Start LAN World`. You will see the bot join the world soon.
 
 ## Option 3: Run a dedicated Minecraft server
+
 Install the Fabric minecraft server following the instructions at https://fabricmc.net/use/server/, or use the below:
+
 ```
 curl -OJ https://meta.fabricmc.net/v2/versions/loader/1.19/0.14.18/0.11.2/server/jar
 java -Xmx2G -jar fabric-server-mc.1.19-loader.0.14.18-launcher.0.11.2.jar nogui
@@ -116,6 +125,7 @@ This will start the server, creating the necessary folder structure. You should 
 You should now copy the mods into the mods directory as per https://github.com/MineDojo/Voyager/blob/main/installation/fabric_mods_install.md
 
 Edit the `server.properties` file, changing the following values
+
 ```
 difficulty=peaceful
 gamemode=survival
@@ -131,6 +141,7 @@ You can now start the server again. Now you can start Voyager, and have it conne
 # Resume from a checkpoint during learning
 
 If you stop the learning process and want to resume from a checkpoint later, you can instantiate Voyager by:
+
 ```python
 from voyager import Voyager
 
@@ -145,6 +156,7 @@ voyager = Voyager(
 # Run Voyager for a specific task with a learned skill library
 
 If you want to run Voyager for a specific task with a learned skill library, you should first pass the skill library directory to Voyager:
+
 ```python
 from voyager import Voyager
 
@@ -157,13 +169,17 @@ voyager = Voyager(
     resume=False, # Do not resume from a skill library because this is not learning.
 )
 ```
+
 Then, you can run task decomposition. Notice: Occasionally, the task decomposition may not be logical. If you notice the printed sub-goals are flawed, you can rerun the decomposition.
+
 ```python
 # Run task decomposition
 task = "YOUR TASK" # e.g. "Craft a diamond pickaxe"
 sub_goals = voyager.decompose_task(task=task)
 ```
+
 Finally, you can run the sub-goals with the learned skill library:
+
 ```python
 voyager.inference(sub_goals=sub_goals)
 ```
@@ -171,11 +187,12 @@ voyager.inference(sub_goals=sub_goals)
 For all valid skill libraries, see [Learned Skill Libraries](skill_library/README.md).
 
 # FAQ
+
 If you have any questions, please check our [FAQ](FAQ.md) first before opening an issue.
 
 # Paper and Citation
 
-If you find our work useful, please consider citing us! 
+If you find our work useful, please consider citing us!
 
 ```bibtex
 @article{wang2023voyager,

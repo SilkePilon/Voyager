@@ -1,3 +1,4 @@
+aiohttp==3.9.0b0
 tqdm
 langchain
 javascript
