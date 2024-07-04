@@ -53,6 +53,14 @@ ollama pull mxbai-embed-large
 
 This will download an tested model that you can use as an base.
 
+Now we can continue by downloading the model that we are going to use:
+
+```
+ollama pull llama2
+```
+
+After this is done you can continue to the next step.
+
 ## Python Install
 
 ```

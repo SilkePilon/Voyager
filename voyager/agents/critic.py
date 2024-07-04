@@ -19,14 +19,17 @@ class CriticAgent:
         self.mode = mode
 
     def chat(self, messages):
+
+        messages = []
+        for m in messages:
+            if m.type == "system":
+                messages.append({"role": "system", "content": m.content})
+            else:
+                messages.append({"role": "user", "content": m.content})
+
         response = ollama.chat(
             model=self.model_name,
-            messages=[{"role": m.type, "content": m.content}
-                      for m in messages],
-            options={
-                "temperature": self.temperature,
-                "request_timeout": self.request_timeout,
-            }
+            messages=messages,
         )
         return response['message']['content']
 

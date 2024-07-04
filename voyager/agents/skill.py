@@ -11,7 +11,7 @@ from voyager.control_primitives import load_control_primitives
 
 
 class OllamaEmbeddings(Embeddings):
-    def __init__(self, model="mxbai-embed-large"):
+    def __init__(self, model="llama2"):  # mxbai-embed-large
         self.model = model
 
     def embed_documents(self, texts):
@@ -50,7 +50,7 @@ class SkillManager:
         self.ckpt_dir = ckpt_dir
         self.vectordb = Chroma(
             collection_name="skill_vectordb",
-            embedding_function=OllamaEmbeddings(model="mxbai-embed-large"),
+            embedding_function=OllamaEmbeddings(model="llama2"),
             persist_directory=f"{ckpt_dir}/skill/vectordb",
         )
         assert self.vectordb._collection.count() == len(self.skills), (
@@ -62,14 +62,15 @@ class SkillManager:
         )
 
     def chat(self, messages):
+        messages = []
+        for m in messages:
+            if m.type == "system":
+                messages.append({"role": "system", "content": m.content})
+            else:
+                messages.append({"role": "user", "content": m.content})
         response = ollama.chat(
             model=self.model_name,
-            messages=[{"role": m.type, "content": m.content}
-                      for m in messages],
-            options={
-                "temperature": self.temperature,
-                "request_timeout": self.request_timeout,
-            }
+            messages=messages,
         )
         return response['message']['content']
 

@@ -13,7 +13,7 @@ from langchain.embeddings.base import Embeddings
 
 
 class OllamaEmbeddings(Embeddings):
-    def __init__(self, model="mxbai-embed-large"):
+    def __init__(self, model="llaama2"):  # mxbai-embed-large
         self.model = model
 
     def embed_documents(self, texts):
@@ -89,15 +89,18 @@ class CurriculumAgent:
         self.warm_up["completed_tasks"] = 0
         self.warm_up["failed_tasks"] = 0
 
-        def chat(self, messages, model_name):
+        def chat(messages, model_name):
+
+            messages = []
+            for m in messages:
+                if m.type == "system":
+                    messages.append({"role": "system", "content": m.content})
+                else:
+                    messages.append({"role": "user", "content": m.content})
+
             response = ollama.chat(
                 model=model_name,
-                messages=[{"role": m.type, "content": m.content}
-                          for m in messages],
-                options={
-                    "temperature": self.temperature if model_name == self.model_name else self.qa_temperature,
-                    "request_timeout": self.request_timeout,
-                }
+                messages=messages,
             )
             return response['message']['content']
 

@@ -14,6 +14,7 @@ const Inventory = require("./lib/observation/inventory");
 const OnSave = require("./lib/observation/onSave");
 const Chests = require("./lib/observation/chests");
 const { plugin: tool } = require("mineflayer-tool");
+const mineflayerViewer = require("prismarine-viewer").mineflayer;
 
 let bot = null;
 
@@ -51,6 +52,17 @@ app.post("/start", (req, res) => {
 
     bot.once("spawn", async () => {
         bot.removeListener("error", onConnectionFailed);
+        mineflayerViewer(bot, { port: 2222 }); // Start the viewing server on port 3000
+
+        // Draw the path followed by the bot
+        const path = [bot.entity.position.clone()];
+        bot.on("move", () => {
+            if (path[path.length - 1].distanceTo(bot.entity.position) > 1) {
+                path.push(bot.entity.position.clone());
+                bot.viewer.drawLine("path", path);
+            }
+        });
+
         let itemTicks = 1;
         if (req.body.reset === "hard") {
             bot.chat("/clear @s");

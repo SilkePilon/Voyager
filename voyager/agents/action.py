@@ -1,6 +1,7 @@
 import re
 import time
 import ollama
+import ast
 
 import voyager.utils as U
 from javascript import require
@@ -36,9 +37,26 @@ class ActionAgent:
         else:
             self.chest_memory = {}
 
-        def chat(self, messages):
-            response = ollama.chat(model=self.model_name, messages=messages)
+        def chat(messages):
+            formatted_messages = []
+            for m in messages:
+                if isinstance(m, SystemMessage):
+                    formatted_messages.append(
+                        {"role": "system", "content": m.content})
+                elif isinstance(m, HumanMessage):
+                    formatted_messages.append(
+                        {"role": "user", "content": m.content})
+                else:
+                    print(f"\033[32mUnknown message type: {type(m)}\033[0m")
+            response = ollama.chat(
+                model=model_name,
+                messages=formatted_messages,
+            )
             return AIMessage(content=response['message']['content'])
+
+        # def chat(messages):
+        #     response = ollama.chat(model=self.model_name, messages=messages)
+        #     return AIMessage(content=response['message']['content'])
 
         self.llm = chat
 
@@ -206,62 +224,64 @@ class ActionAgent:
         return HumanMessage(content=observation)
 
     def process_ai_message(self, message):
+        print("Processing AI message")
         assert isinstance(message, AIMessage)
 
         retry = 3
         error = None
         while retry > 0:
+            print(f"Retry: {retry}")
             try:
-                babel = require("@babel/core")
-                babel_generator = require("@babel/generator").default
-
+                # Extract code from markdown code blocks
                 code_pattern = re.compile(
                     r"```(?:javascript|js)(.*?)```", re.DOTALL)
                 code = "\n".join(code_pattern.findall(message.content))
-                parsed = babel.parse(code)
+
+                if not code:
+                    return "No JavaScript code found in the message."
+
+                # Parse the code to find functions
                 functions = []
-                assert len(list(parsed.program.body)) > 0, "No functions found"
-                for i, node in enumerate(parsed.program.body):
-                    if node.type != "FunctionDeclaration":
-                        continue
-                    node_type = (
-                        "AsyncFunctionDeclaration"
-                        if node["async"]
-                        else "FunctionDeclaration"
-                    )
-                    functions.append(
-                        {
-                            "name": node.id.name,
-                            "type": node_type,
-                            "body": babel_generator(node).code,
-                            "params": list(node["params"]),
-                        }
-                    )
-                # find the last async function
-                main_function = None
-                for function in reversed(functions):
-                    if function["type"] == "AsyncFunctionDeclaration":
-                        main_function = function
-                        break
-                assert (
-                    main_function is not None
-                ), "No async function found. Your main function must be async."
-                assert (
-                    len(main_function["params"]) == 1
-                    and main_function["params"][0].name == "bot"
-                ), f"Main function {main_function['name']} must take a single argument named 'bot'"
+                tree = ast.parse(code)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+                        is_async = isinstance(node, ast.AsyncFunctionDef)
+                        functions.append({
+                            "name": node.name,
+                            "type": "AsyncFunctionDeclaration" if is_async else "FunctionDeclaration",
+                            "body": ast.get_source_segment(code, node),
+                            "params": [arg.arg for arg in node.args.args]
+                        })
+
+                if not functions:
+                    return "No functions found in the JavaScript code."
+
+                # Find the main function (last async function or last function if no async)
+                async_functions = [
+                    f for f in functions if f["type"] == "AsyncFunctionDeclaration"]
+                main_function = async_functions[-1] if async_functions else functions[-1]
+
+                # Validate main function
+                if len(main_function["params"]) != 1 or main_function["params"][0] != "bot":
+                    return f"Main function {main_function['name']} must take a single argument named 'bot'"
+
+                # Prepare the code for execution
                 program_code = "\n\n".join(
                     function["body"] for function in functions)
                 exec_code = f"await {main_function['name']}(bot);"
+
                 return {
                     "program_code": program_code,
                     "program_name": main_function["name"],
                     "exec_code": exec_code,
                 }
+
             except Exception as e:
+                print(f"Error parsing action response: {e}")
                 retry -= 1
                 error = e
                 time.sleep(1)
+
         return f"Error parsing action response (before program execution): {error}"
 
     def summarize_chatlog(self, events):
