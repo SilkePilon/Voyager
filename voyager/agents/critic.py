@@ -1,24 +1,34 @@
+import ollama
 from voyager.prompts import load_prompt
 from voyager.utils.json_utils import fix_and_parse_json
-from langchain.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 
 
 class CriticAgent:
     def __init__(
         self,
-        model_name="gpt-3.5-turbo",
+        model_name="llama2",
         temperature=0,
-        request_timout=120,
+        request_timeout=120,
         mode="auto",
     ):
-        self.llm = ChatOpenAI(
-            model_name=model_name,
-            temperature=temperature,
-            request_timeout=request_timout,
-        )
+        self.model_name = model_name
+        self.temperature = temperature
+        self.request_timeout = request_timeout
         assert mode in ["auto", "manual"]
         self.mode = mode
+
+    def chat(self, messages):
+        response = ollama.chat(
+            model=self.model_name,
+            messages=[{"role": m.type, "content": m.content}
+                      for m in messages],
+            options={
+                "temperature": self.temperature,
+                "request_timeout": self.request_timeout,
+            }
+        )
+        return response['message']['content']
 
     def render_system_message(self):
         system_message = SystemMessage(content=load_prompt("critic"))
@@ -38,7 +48,8 @@ class CriticAgent:
 
         for i, (event_type, event) in enumerate(events):
             if event_type == "onError":
-                print(f"\033[31mCritic Agent: Error occurs {event['onError']}\033[0m")
+                print(f"\033[31mCritic Agent: Error occurs {
+                      event['onError']}\033[0m")
                 return None
 
         observation = ""
@@ -55,7 +66,8 @@ class CriticAgent:
         observation += f"Health: {health:.1f}/20\n\n"
         observation += f"Hunger: {hunger:.1f}/20\n\n"
 
-        observation += f"Position: x={position['x']:.1f}, y={position['y']:.1f}, z={position['z']:.1f}\n\n"
+        observation += f"Position: x={position['x']:.1f}, y={
+            position['y']:.1f}, z={position['z']:.1f}\n\n"
 
         observation += f"Equipment: {equipment}\n\n"
 
@@ -73,7 +85,8 @@ class CriticAgent:
         else:
             observation += f"Context: None\n\n"
 
-        print(f"\033[31m****Critic Agent human message****\n{observation}\033[0m")
+        print(
+            f"\033[31m****Critic Agent human message****\n{observation}\033[0m")
         return HumanMessage(content=observation)
 
     def human_check_task_success(self):
@@ -98,7 +111,7 @@ class CriticAgent:
         if messages[1] is None:
             return False, ""
 
-        critic = self.llm(messages).content
+        critic = self.chat(messages)
         print(f"\033[31m****Critic Agent ai message****\n{critic}\033[0m")
         try:
             response = fix_and_parse_json(critic)
@@ -107,7 +120,8 @@ class CriticAgent:
                 response["critique"] = ""
             return response["success"], response["critique"]
         except Exception as e:
-            print(f"\033[31mError parsing critic response: {e} Trying again!\033[0m")
+            print(f"\033[31mError parsing critic response: {
+                  e} Trying again!\033[0m")
             return self.ai_check_task_success(
                 messages=messages,
                 max_retries=max_retries - 1,

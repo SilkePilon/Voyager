@@ -1,4 +1,4 @@
-# Voyager: An Open-Ended Embodied Agent with Large Language Models
+# Voyager: An Open-Ended Embodied Agent with support for running on open-source LLM models.
 
 <div align="center">
 
@@ -41,6 +41,18 @@ In this repo, we provide Voyager code. This codebase is under [MIT License](LICE
 
 Voyager requires Python ≥ 3.9 and Node.js ≥ 16.13.0. We have tested on Ubuntu 20.04, Windows 11, and macOS. You need to follow the instructions below to install Voyager.
 
+## Ollama install
+
+Voyager requires Ollama to be installed as it magages and runs the open-source models, you can get it from [here](https://ollama.com/download/)
+
+Once installed run the following command:
+
+```
+ollama pull mxbai-embed-large
+```
+
+This will download an tested model that you can use as an base.
+
 ## Python Install
 
 ```
@@ -67,11 +79,11 @@ npm install
 
 ## Minecraft Instance Install
 
-Voyager depends on Minecraft game. You need to install Minecraft game and set up a Minecraft instance.
+Voyager depends on Minecraft. You need to install Minecraft and set up a Minecraft (1.19 is tested and works. but newer and older versions should also work) instance.
 
 Follow the instructions in [Minecraft Login Tutorial](installation/minecraft_instance_install.md) to set up your Minecraft Instance.
 
-## Fabric Mods Install
+## Fabric Mods Install (OPTIONAL)
 
 You need to install fabric mods to support all the features in Voyager. Remember to use the correct Fabric version of all the mods.
 
@@ -113,7 +125,9 @@ voyager.learn()
 
 ## Option 3: Run a dedicated Minecraft server
 
-Install the Fabric minecraft server following the instructions at https://fabricmc.net/use/server/, or use the below:
+If you dont have Java 21 installed already you can download it from [here](https://www.oracle.com/nl/java/technologies/downloads/#java21)
+
+Then install the Fabric minecraft server following the instructions at https://fabricmc.net/use/server/, or use the below:
 
 ```
 curl -OJ https://meta.fabricmc.net/v2/versions/loader/1.19/0.14.18/0.11.2/server/jar

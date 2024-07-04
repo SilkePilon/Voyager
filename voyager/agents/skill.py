@@ -1,37 +1,48 @@
 import os
+import ollama
 
 import voyager.utils as U
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.vectorstores import Chroma
+from langchain.embeddings.base import Embeddings
 
 from voyager.prompts import load_prompt
 from voyager.control_primitives import load_control_primitives
 
 
+class OllamaEmbeddings(Embeddings):
+    def __init__(self, model="mxbai-embed-large"):
+        self.model = model
+
+    def embed_documents(self, texts):
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text):
+        response = ollama.embeddings(model=self.model, prompt=text)
+        return response['embedding']
+
+
 class SkillManager:
     def __init__(
         self,
-        model_name="gpt-3.5-turbo",
+        model_name="llama2",
         temperature=0,
         retrieval_top_k=5,
-        request_timout=120,
+        request_timeout=120,
         ckpt_dir="ckpt",
         resume=False,
     ):
-        self.llm = ChatOpenAI(
-            model_name=model_name,
-            temperature=temperature,
-            request_timeout=request_timout,
-        )
+        self.model_name = model_name
+        self.temperature = temperature
+        self.request_timeout = request_timeout
         U.f_mkdir(f"{ckpt_dir}/skill/code")
         U.f_mkdir(f"{ckpt_dir}/skill/description")
         U.f_mkdir(f"{ckpt_dir}/skill/vectordb")
         # programs for env execution
         self.control_primitives = load_control_primitives()
         if resume:
-            print(f"\033[33mLoading Skill Manager from {ckpt_dir}/skill\033[0m")
+            print(f"\033[33mLoading Skill Manager from {
+                  ckpt_dir}/skill\033[0m")
             self.skills = U.load_json(f"{ckpt_dir}/skill/skills.json")
         else:
             self.skills = {}
@@ -39,15 +50,28 @@ class SkillManager:
         self.ckpt_dir = ckpt_dir
         self.vectordb = Chroma(
             collection_name="skill_vectordb",
-            embedding_function=OpenAIEmbeddings(),
+            embedding_function=OllamaEmbeddings(model="mxbai-embed-large"),
             persist_directory=f"{ckpt_dir}/skill/vectordb",
         )
         assert self.vectordb._collection.count() == len(self.skills), (
             f"Skill Manager's vectordb is not synced with skills.json.\n"
-            f"There are {self.vectordb._collection.count()} skills in vectordb but {len(self.skills)} skills in skills.json.\n"
+            f"There are {self.vectordb._collection.count()} skills in vectordb but {
+                len(self.skills)} skills in skills.json.\n"
             f"Did you set resume=False when initializing the manager?\n"
             f"You may need to manually delete the vectordb directory for running from scratch."
         )
+
+    def chat(self, messages):
+        response = ollama.chat(
+            model=self.model_name,
+            messages=[{"role": m.type, "content": m.content}
+                      for m in messages],
+            options={
+                "temperature": self.temperature,
+                "request_timeout": self.request_timeout,
+            }
+        )
+        return response['message']['content']
 
     @property
     def programs(self):
@@ -64,12 +88,13 @@ class SkillManager:
             return
         program_name = info["program_name"]
         program_code = info["program_code"]
-        skill_description = self.generate_skill_description(program_name, program_code)
-        print(
-            f"\033[33mSkill Manager generated description for {program_name}:\n{skill_description}\033[0m"
-        )
+        skill_description = self.generate_skill_description(
+            program_name, program_code)
+        print(f"\033[33mSkill Manager generated description for {
+              program_name}:\n{skill_description}\033[0m")
         if program_name in self.skills:
-            print(f"\033[33mSkill {program_name} already exists. Rewriting!\033[0m")
+            print(f"\033[33mSkill {
+                  program_name} already exists. Rewriting!\033[0m")
             self.vectordb._collection.delete(ids=[program_name])
             i = 2
             while f"{program_name}V{i}.js" in os.listdir(f"{self.ckpt_dir}/skill/code"):
@@ -87,28 +112,21 @@ class SkillManager:
             "description": skill_description,
         }
         assert self.vectordb._collection.count() == len(
-            self.skills
-        ), "vectordb is not synced with skills.json"
-        U.dump_text(
-            program_code, f"{self.ckpt_dir}/skill/code/{dumped_program_name}.js"
-        )
-        U.dump_text(
-            skill_description,
-            f"{self.ckpt_dir}/skill/description/{dumped_program_name}.txt",
-        )
+            self.skills), "vectordb is not synced with skills.json"
+        U.dump_text(program_code, f"{
+                    self.ckpt_dir}/skill/code/{dumped_program_name}.js")
+        U.dump_text(skill_description, f"{
+                    self.ckpt_dir}/skill/description/{dumped_program_name}.txt")
         U.dump_json(self.skills, f"{self.ckpt_dir}/skill/skills.json")
         self.vectordb.persist()
 
     def generate_skill_description(self, program_name, program_code):
         messages = [
             SystemMessage(content=load_prompt("skill")),
-            HumanMessage(
-                content=program_code
-                + "\n\n"
-                + f"The main function is `{program_name}`."
-            ),
+            HumanMessage(content=program_code + "\n\n" +
+                         f"The main function is `{program_name}`."),
         ]
-        skill_description = f"    // { self.llm(messages).content}"
+        skill_description = f"    // {self.chat(messages)}"
         return f"async function {program_name}(bot) {{\n{skill_description}\n}}"
 
     def retrieve_skills(self, query):
@@ -116,12 +134,15 @@ class SkillManager:
         if k == 0:
             return []
         print(f"\033[33mSkill Manager retrieving for {k} skills\033[0m")
-        docs_and_scores = self.vectordb.similarity_search_with_score(query, k=k)
+        docs_and_scores = self.vectordb.similarity_search_with_score(
+            query, k=k)
         print(
             f"\033[33mSkill Manager retrieved skills: "
-            f"{', '.join([doc.metadata['name'] for doc, _ in docs_and_scores])}\033[0m"
+            f"{', '.join([doc.metadata['name']
+                         for doc, score in docs_and_scores if score < 0.1])}\033[0m"
         )
         skills = []
-        for doc, _ in docs_and_scores:
-            skills.append(self.skills[doc.metadata["name"]]["code"])
+        for doc, score in docs_and_scores:
+            if score < 0.1:  # Adjust this threshold as needed
+                skills.append(self.skills[doc.metadata["name"]]["code"])
         return skills

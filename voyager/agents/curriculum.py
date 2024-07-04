@@ -6,49 +6,54 @@ import re
 import voyager.utils as U
 from voyager.prompts import load_prompt
 from voyager.utils.json_utils import fix_and_parse_json
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.vectorstores import Chroma
+import ollama
+from langchain.embeddings.base import Embeddings
+
+
+class OllamaEmbeddings(Embeddings):
+    def __init__(self, model="mxbai-embed-large"):
+        self.model = model
+
+    def embed_documents(self, texts):
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text):
+        response = ollama.embeddings(model=self.model, prompt=text)
+        return response['embedding']
 
 
 class CurriculumAgent:
     def __init__(
         self,
-        model_name="gpt-3.5-turbo",
+        model_name="llama2",
         temperature=0,
-        qa_model_name="gpt-3.5-turbo",
+        qa_model_name="llama2",
         qa_temperature=0,
-        request_timout=120,
+        request_timeout=120,
         ckpt_dir="ckpt",
         resume=False,
         mode="auto",
         warm_up=None,
         core_inventory_items: str | None = None,
     ):
-        self.llm = ChatOpenAI(
-            model_name=model_name,
-            temperature=temperature,
-            request_timeout=request_timout,
-        )
-        self.qa_llm = ChatOpenAI(
-            model_name=qa_model_name,
-            temperature=qa_temperature,
-            request_timeout=request_timout,
-        )
-        assert mode in [
-            "auto",
-            "manual",
-        ], f"mode {mode} not supported"
+        self.model_name = model_name
+        self.temperature = temperature
+        self.qa_model_name = qa_model_name
+        self.qa_temperature = qa_temperature
+        self.request_timeout = request_timeout
+        assert mode in ["auto", "manual"], f"mode {mode} not supported"
         self.mode = mode
         self.ckpt_dir = ckpt_dir
         U.f_mkdir(f"{ckpt_dir}/curriculum/vectordb")
         if resume:
-            print(f"\033[35mLoading Curriculum Agent from {ckpt_dir}/curriculum\033[0m")
+            print(f"\033[35mLoading Curriculum Agent from {
+                  ckpt_dir}/curriculum\033[0m")
             self.completed_tasks = U.load_json(
-                f"{ckpt_dir}/curriculum/completed_tasks.json"
-            )
-            self.failed_tasks = U.load_json(f"{ckpt_dir}/curriculum/failed_tasks.json")
+                f"{ckpt_dir}/curriculum/completed_tasks.json")
+            self.failed_tasks = U.load_json(
+                f"{ckpt_dir}/curriculum/failed_tasks.json")
             self.qa_cache = U.load_json(f"{ckpt_dir}/curriculum/qa_cache.json")
         else:
             self.completed_tasks = []
@@ -57,28 +62,24 @@ class CurriculumAgent:
         # vectordb for qa cache
         self.qa_cache_questions_vectordb = Chroma(
             collection_name="qa_cache_questions_vectordb",
-            embedding_function=OpenAIEmbeddings(),
+            embedding_function=OllamaEmbeddings(model="mxbai-embed-large"),
             persist_directory=f"{ckpt_dir}/curriculum/vectordb",
         )
-        assert self.qa_cache_questions_vectordb._collection.count() == len(
-            self.qa_cache
-        ), (
+        assert self.qa_cache_questions_vectordb._collection.count() == len(self.qa_cache), (
             f"Curriculum Agent's qa cache question vectordb is not synced with qa_cache.json.\n"
-            f"There are {self.qa_cache_questions_vectordb._collection.count()} questions in vectordb "
+            f"There are {
+                self.qa_cache_questions_vectordb._collection.count()} questions in vectordb "
             f"but {len(self.qa_cache)} questions in qa_cache.json.\n"
             f"Did you set resume=False when initializing the agent?\n"
             f"You may need to manually delete the qa cache question vectordb directory for running from scratch.\n"
         )
-        # if warm up not defined, initialize it as a dict, else, initialize all the missing value as a default value
         if not warm_up:
             warm_up = self.default_warmup
         self.warm_up = {}
         if "optional_inventory_items" in warm_up:
             assert core_inventory_items is not None
             self._core_inv_items_regex = re.compile(core_inventory_items)
-            self.warm_up["optional_inventory_items"] = warm_up[
-                "optional_inventory_items"
-            ]
+            self.warm_up["optional_inventory_items"] = warm_up["optional_inventory_items"]
         else:
             self.warm_up["optional_inventory_items"] = 0
         for key in self.curriculum_observations:
@@ -87,6 +88,20 @@ class CurriculumAgent:
         self.warm_up["inventory"] = 0
         self.warm_up["completed_tasks"] = 0
         self.warm_up["failed_tasks"] = 0
+
+        def chat(self, messages, model_name):
+            response = ollama.chat(
+                model=model_name,
+                messages=[{"role": m.type, "content": m.content}
+                          for m in messages],
+                options={
+                    "temperature": self.temperature if model_name == self.model_name else self.qa_temperature,
+                    "request_timeout": self.request_timeout,
+                }
+            )
+            return response['message']['content']
+
+        self.llm = chat
 
     @property
     def default_warmup(self):
@@ -163,14 +178,16 @@ class CurriculumAgent:
 
         other_blocks = ", ".join(
             list(
-                set(block_records).difference(set(voxels).union(set(inventory.keys())))
+                set(block_records).difference(
+                    set(voxels).union(set(inventory.keys())))
             )
         )
 
         other_blocks = other_blocks if other_blocks else "None"
 
         nearby_entities = (
-            ", ".join([k for k, v in sorted(entities.items(), key=lambda x: x[1])])
+            ", ".join([k for k, v in sorted(
+                entities.items(), key=lambda x: x[1])])
             if entities
             else "None"
         )
@@ -178,7 +195,8 @@ class CurriculumAgent:
         completed_tasks = (
             ", ".join(self.completed_tasks) if self.completed_tasks else "None"
         )
-        failed_tasks = ", ".join(self.failed_tasks) if self.failed_tasks else "None"
+        failed_tasks = ", ".join(
+            self.failed_tasks) if self.failed_tasks else "None"
 
         # filter out optional inventory items if required
         if self.progress < self.warm_up["optional_inventory_items"]:
@@ -234,7 +252,8 @@ class CurriculumAgent:
                 if should_include:
                     content += observation[key]
 
-        print(f"\033[35m****Curriculum Agent human message****\n{content}\033[0m")
+        print(
+            f"\033[35m****Curriculum Agent human message****\n{content}\033[0m")
         return HumanMessage(content=content)
 
     def propose_next_task(self, *, events, chest_observation, max_retries=5):
@@ -252,9 +271,11 @@ class CurriculumAgent:
                     content = chest.split(":")[1]
                     if content == " Unknown items inside" or content == " Empty":
                         position = chest.split(":")[0]
-                        task = f"Deposit useless items into the chest at {position}"
+                        task = f"Deposit useless items into the chest at {
+                            position}"
                         context = (
-                            f"Your inventory have {inventoryUsed} occupied slots before depositing. "
+                            f"Your inventory have {
+                                inventoryUsed} occupied slots before depositing. "
                             "After depositing, your inventory should only have 20 occupied slots. "
                             "You should deposit useless items such as andesite, dirt, cobblestone, etc. "
                             "Also, you can deposit low-level tools, "
@@ -291,18 +312,19 @@ class CurriculumAgent:
 
     def propose_next_ai_task(self, *, messages, max_retries=5):
         if max_retries == 0:
-            raise RuntimeError("Max retries reached, failed to propose ai task.")
-        curriculum = self.llm(messages).content
-        print(f"\033[31m****Curriculum Agent ai message****\n{curriculum}\033[0m")
+            raise RuntimeError(
+                "Max retries reached, failed to propose ai task.")
+        curriculum = self.chat(messages, self.model_name)
+        print(
+            f"\033[31m****Curriculum Agent ai message****\n{curriculum}\033[0m")
         try:
             response = self.parse_ai_message(curriculum)
             assert "next_task" in response
             context = self.get_task_context(response["next_task"])
             return response["next_task"], context
         except Exception as e:
-            print(
-                f"\033[35mError parsing curriculum response: {e}. Trying again!\033[0m"
-            )
+            print(f"\033[35mError parsing curriculum response: {
+                  e}. Trying again!\033[0m")
             return self.propose_next_ai_task(
                 messages=messages,
                 max_retries=max_retries - 1,
@@ -336,7 +358,8 @@ class CurriculumAgent:
             self.completed_tasks.append(task)
         else:
             print(
-                f"\033[35mFailed to complete task {task}. Skipping to next task.\033[0m"
+                f"\033[35mFailed to complete task {
+                    task}. Skipping to next task.\033[0m"
             )
             self.failed_tasks.append(task)
 
@@ -362,9 +385,11 @@ class CurriculumAgent:
 
         # dump to json
         U.dump_json(
-            self.completed_tasks, f"{self.ckpt_dir}/curriculum/completed_tasks.json"
+            self.completed_tasks, f"{
+                self.ckpt_dir}/curriculum/completed_tasks.json"
         )
-        U.dump_json(self.failed_tasks, f"{self.ckpt_dir}/curriculum/failed_tasks.json")
+        U.dump_json(self.failed_tasks, f"{
+                    self.ckpt_dir}/curriculum/failed_tasks.json")
 
     def decompose_task(self, task, events):
         messages = [
@@ -375,10 +400,12 @@ class CurriculumAgent:
             HumanMessage(content=f"Final task: {task}"),
         ]
         print(
-            f"\033[31m****Curriculum Agent task decomposition****\nFinal task: {task}\033[0m"
+            f"\033[31m****Curriculum Agent task decomposition****\nFinal task: {
+                task}\033[0m"
         )
         response = self.llm(messages).content
-        print(f"\033[31m****Curriculum Agent task decomposition****\n{response}\033[0m")
+        print(
+            f"\033[31m****Curriculum Agent task decomposition****\n{response}\033[0m")
         return fix_and_parse_json(response)
 
     def run_qa(self, *, events, chest_observation):
@@ -407,7 +434,8 @@ class CurriculumAgent:
             self.qa_cache_questions_vectordb.add_texts(
                 texts=[question],
             )
-            U.dump_json(self.qa_cache, f"{self.ckpt_dir}/curriculum/qa_cache.json")
+            U.dump_json(self.qa_cache, f"{
+                        self.ckpt_dir}/curriculum/qa_cache.json")
             self.qa_cache_questions_vectordb.persist()
             questions.append(question)
             answers.append(answer)
@@ -417,7 +445,8 @@ class CurriculumAgent:
     def get_task_context(self, task):
         # if include ore in question, gpt will try to use tool with skill touch enhancement to mine
         question = (
-            f"How to {task.replace('_', ' ').replace(' ore', '').replace(' ores', '').replace('.', '').strip().lower()}"
+            f"How to {task.replace('_', ' ').replace(' ore', '').replace(
+                ' ores', '').replace('.', '').strip().lower()}"
             f" in Minecraft?"
         )
         if question in self.qa_cache:
@@ -428,7 +457,8 @@ class CurriculumAgent:
             self.qa_cache_questions_vectordb.add_texts(
                 texts=[question],
             )
-            U.dump_json(self.qa_cache, f"{self.ckpt_dir}/curriculum/qa_cache.json")
+            U.dump_json(self.qa_cache, f"{
+                        self.ckpt_dir}/curriculum/qa_cache.json")
             self.qa_cache_questions_vectordb.persist()
         context = f"Question: {question}\n{answer}"
         return context
@@ -448,7 +478,8 @@ class CurriculumAgent:
     def run_qa_step1_ask_questions(self, *, events, chest_observation):
         biome = events[-1][1]["status"]["biome"].replace("_", " ")
         questions = [
-            f"What are the blocks that I can find in the {biome} in Minecraft?",
+            f"What are the blocks that I can find in the {
+                biome} in Minecraft?",
             f"What are the items that I can find in the {biome} in Minecraft?",
             f"What are the mobs that I can find in the {biome} in Minecraft?",
         ]
@@ -490,9 +521,10 @@ class CurriculumAgent:
     def run_qa_step2_answer_questions(self, question):
         messages = [
             self.render_system_message_qa_step2_answer_questions(),
-            self.render_human_message_qa_step2_answer_questions(question=question),
+            self.render_human_message_qa_step2_answer_questions(
+                question=question),
         ]
         print(f"\033[35mCurriculum Agent Question: {question}\033[0m")
-        qa_answer = self.qa_llm(messages).content
+        qa_answer = self.chat(messages, self.qa_model_name)
         print(f"\033[31mCurriculum Agent {qa_answer}\033[0m")
         return qa_answer

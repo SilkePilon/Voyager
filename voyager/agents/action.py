@@ -1,10 +1,9 @@
 import re
 import time
+import ollama
 
 import voyager.utils as U
 from javascript import require
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import SystemMessagePromptTemplate
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
 
 from voyager.prompts import load_prompt
@@ -12,9 +11,10 @@ from voyager.control_primitives_context import load_control_primitives_context
 
 
 class ActionAgent:
+
     def __init__(
         self,
-        model_name="gpt-3.5-turbo",
+        model_name="llama2",
         temperature=0,
         request_timout=120,
         ckpt_dir="ckpt",
@@ -25,17 +25,22 @@ class ActionAgent:
         self.ckpt_dir = ckpt_dir
         self.chat_log = chat_log
         self.execution_error = execution_error
+        self.model_name = model_name
+        self.temperature = temperature
         U.f_mkdir(f"{ckpt_dir}/action")
         if resume:
-            print(f"\033[32mLoading Action Agent from {ckpt_dir}/action\033[0m")
-            self.chest_memory = U.load_json(f"{ckpt_dir}/action/chest_memory.json")
+            print(f"\033[32mLoading Action Agent from {
+                  ckpt_dir}/action\033[0m")
+            self.chest_memory = U.load_json(
+                f"{ckpt_dir}/action/chest_memory.json")
         else:
             self.chest_memory = {}
-        self.llm = ChatOpenAI(
-            model_name=model_name,
-            temperature=temperature,
-            request_timeout=request_timout,
-        )
+
+        def chat(self, messages):
+            response = ollama.chat(model=self.model_name, messages=messages)
+            return AIMessage(content=response['message']['content'])
+
+        self.llm = chat
 
     def update_chest_memory(self, chests):
         for position, chest in chests.items():
@@ -44,14 +49,17 @@ class ActionAgent:
                     self.chest_memory[position] = chest
                 if chest == "Invalid":
                     print(
-                        f"\033[32mAction Agent removing chest {position}: {chest}\033[0m"
+                        f"\033[32mAction Agent removing chest {
+                            position}: {chest}\033[0m"
                     )
                     self.chest_memory.pop(position)
             else:
                 if chest != "Invalid":
-                    print(f"\033[32mAction Agent saving chest {position}: {chest}\033[0m")
+                    print(f"\033[32mAction Agent saving chest {
+                          position}: {chest}\033[0m")
                     self.chest_memory[position] = chest
-        U.dump_json(self.chest_memory, f"{self.ckpt_dir}/action/chest_memory.json")
+        U.dump_json(self.chest_memory, f"{
+                    self.ckpt_dir}/action/chest_memory.json")
 
     def render_chest_observation(self):
         chests = []
@@ -83,20 +91,17 @@ class ActionAgent:
             "smeltItem",
             "killMob",
         ]
-        if not self.llm.model_name == "gpt-3.5-turbo":
+        if self.model_name != "llama2":
             base_skills += [
                 "useChest",
                 "mineflayer",
             ]
-        programs = "\n\n".join(load_control_primitives_context(base_skills) + skills)
+        programs = "\n\n".join(
+            load_control_primitives_context(base_skills) + skills)
         response_format = load_prompt("action_response_format")
-        system_message_prompt = SystemMessagePromptTemplate.from_template(
-            system_template
-        )
-        system_message = system_message_prompt.format(
+        system_message = SystemMessage(content=system_template.format(
             programs=programs, response_format=response_format
-        )
-        assert isinstance(system_message, SystemMessage)
+        ))
         return system_message
 
     def render_human_message(
@@ -161,7 +166,8 @@ class ActionAgent:
             nearby_entities = [
                 k for k, v in sorted(entities.items(), key=lambda x: x[1])
             ]
-            observation += f"Nearby entities (nearest to farthest): {', '.join(nearby_entities)}\n\n"
+            observation += f"Nearby entities (nearest to farthest): {
+                ', '.join(nearby_entities)}\n\n"
         else:
             observation += f"Nearby entities (nearest to farthest): None\n\n"
 
@@ -169,7 +175,8 @@ class ActionAgent:
 
         observation += f"Hunger: {hunger:.1f}/20\n\n"
 
-        observation += f"Position: x={position['x']:.1f}, y={position['y']:.1f}, z={position['z']:.1f}\n\n"
+        observation += f"Position: x={position['x']:.1f}, y={
+            position['y']:.1f}, z={position['z']:.1f}\n\n"
 
         observation += f"Equipment: {equipment}\n\n"
 
@@ -208,7 +215,8 @@ class ActionAgent:
                 babel = require("@babel/core")
                 babel_generator = require("@babel/generator").default
 
-                code_pattern = re.compile(r"```(?:javascript|js)(.*?)```", re.DOTALL)
+                code_pattern = re.compile(
+                    r"```(?:javascript|js)(.*?)```", re.DOTALL)
                 code = "\n".join(code_pattern.findall(message.content))
                 parsed = babel.parse(code)
                 functions = []
@@ -242,7 +250,8 @@ class ActionAgent:
                     len(main_function["params"]) == 1
                     and main_function["params"][0].name == "bot"
                 ), f"Main function {main_function['name']} must take a single argument named 'bot'"
-                program_code = "\n\n".join(function["body"] for function in functions)
+                program_code = "\n\n".join(
+                    function["body"] for function in functions)
                 exec_code = f"await {main_function['name']}(bot);"
                 return {
                     "program_code": program_code,

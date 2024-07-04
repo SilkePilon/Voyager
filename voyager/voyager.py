@@ -130,7 +130,6 @@ class Voyager:
             temperature=curriculum_agent_temperature,
             qa_model_name=curriculum_agent_qa_model_name,
             qa_temperature=curriculum_agent_qa_temperature,
-            request_timout=openai_api_request_timeout,
             ckpt_dir=ckpt_dir,
             resume=resume,
             mode=curriculum_agent_mode,
@@ -140,14 +139,12 @@ class Voyager:
         self.critic_agent = CriticAgent(
             model_name=critic_agent_model_name,
             temperature=critic_agent_temperature,
-            request_timout=openai_api_request_timeout,
             mode=critic_agent_mode,
         )
         self.skill_manager = SkillManager(
             model_name=skill_manager_model_name,
             temperature=skill_manager_temperature,
             retrieval_top_k=skill_manager_retrieval_top_k,
-            request_timout=openai_api_request_timeout,
             ckpt_dir=skill_library_dir if skill_library_dir else ckpt_dir,
             resume=True if resume or skill_library_dir else False,
         )
@@ -174,7 +171,8 @@ class Voyager:
                 }
             )
         difficulty = (
-            "easy" if len(self.curriculum_agent.completed_tasks) > 15 else "peaceful"
+            "easy" if len(
+                self.curriculum_agent.completed_tasks) > 15 else "peaceful"
         )
         # step to peek an observation
         events = self.env.step(
@@ -183,7 +181,8 @@ class Voyager:
         )
         skills = self.skill_manager.retrieve_skills(query=self.context)
         print(
-            f"\033[33mRender Action Agent system message with {len(skills)} skills\033[0m"
+            f"\033[33mRender Action Agent system message with {
+                len(skills)} skills\033[0m"
         )
         system_message = self.action_agent.render_system_message(skills=skills)
         human_message = self.action_agent.render_human_message(
@@ -191,7 +190,8 @@ class Voyager:
         )
         self.messages = [system_message, human_message]
         print(
-            f"\033[32m****Action Agent human message****\n{human_message.content}\033[0m"
+            f"\033[32m****Action Agent human message****\n{
+                human_message.content}\033[0m"
         )
         assert len(self.messages) == 2
         self.conversations = []
@@ -204,20 +204,25 @@ class Voyager:
         if self.action_agent_rollout_num_iter < 0:
             raise ValueError("Agent must be reset before stepping")
         ai_message = self.action_agent.llm(self.messages)
-        print(f"\033[34m****Action Agent ai message****\n{ai_message.content}\033[0m")
+        print(
+            f"\033[34m****Action Agent ai message****\n{ai_message.content}\033[0m")
         self.conversations.append(
-            (self.messages[0].content, self.messages[1].content, ai_message.content)
+            (self.messages[0].content,
+             self.messages[1].content, ai_message.content)
         )
-        parsed_result = self.action_agent.process_ai_message(message=ai_message)
+        parsed_result = self.action_agent.process_ai_message(
+            message=ai_message)
         success = False
         if isinstance(parsed_result, dict):
-            code = parsed_result["program_code"] + "\n" + parsed_result["exec_code"]
+            code = parsed_result["program_code"] + \
+                "\n" + parsed_result["exec_code"]
             events = self.env.step(
                 code,
                 programs=self.skill_manager.programs,
             )
             self.recorder.record(events, self.task)
-            self.action_agent.update_chest_memory(events[-1][1]["nearbyChests"])
+            self.action_agent.update_chest_memory(
+                events[-1][1]["nearbyChests"])
             success, critique = self.critic_agent.check_task_success(
                 events=events,
                 task=self.task,
@@ -237,7 +242,8 @@ class Voyager:
                         blocks.append(block)
                         positions.append(position)
                 new_events = self.env.step(
-                    f"await givePlacedItemBack(bot, {U.json_dumps(blocks)}, {U.json_dumps(positions)})",
+                    f"await givePlacedItemBack(bot, {U.json_dumps(blocks)}, {
+                        U.json_dumps(positions)})",
                     programs=self.skill_manager.programs,
                 )
                 events[-1][1]["inventory"] = new_events[-1][1]["inventory"]
@@ -247,7 +253,8 @@ class Voyager:
                 + "\n\n"
                 + self.action_agent.summarize_chatlog(events)
             )
-            system_message = self.action_agent.render_system_message(skills=new_skills)
+            system_message = self.action_agent.render_system_message(
+                skills=new_skills)
             human_message = self.action_agent.render_human_message(
                 events=events,
                 code=parsed_result["program_code"],
@@ -280,7 +287,8 @@ class Voyager:
             info["program_name"] = parsed_result["program_name"]
         else:
             print(
-                f"\033[32m****Action Agent human message****\n{self.messages[-1].content}\033[0m"
+                f"\033[32m****Action Agent human message****\n{
+                    self.messages[-1].content}\033[0m"
             )
         return self.messages, 0, done, info
 
@@ -322,7 +330,8 @@ class Voyager:
                 max_retries=5,
             )
             print(
-                f"\033[35mStarting task {task} for at most {self.action_agent_task_max_retries} times\033[0m"
+                f"\033[35mStarting task {task} for at most {
+                    self.action_agent_task_max_retries} times\033[0m"
             )
             try:
                 messages, reward, done, info = self.rollout(
@@ -355,10 +364,12 @@ class Voyager:
 
             self.curriculum_agent.update_exploration_progress(info)
             print(
-                f"\033[35mCompleted tasks: {', '.join(self.curriculum_agent.completed_tasks)}\033[0m"
+                f"\033[35mCompleted tasks: {
+                    ', '.join(self.curriculum_agent.completed_tasks)}\033[0m"
             )
             print(
-                f"\033[35mFailed tasks: {', '.join(self.curriculum_agent.failed_tasks)}\033[0m"
+                f"\033[35mFailed tasks: {
+                    ', '.join(self.curriculum_agent.failed_tasks)}\033[0m"
             )
 
         return {
@@ -395,7 +406,8 @@ class Voyager:
             next_task = sub_goals[self.curriculum_agent.progress]
             context = self.curriculum_agent.get_task_context(next_task)
             print(
-                f"\033[35mStarting task {next_task} for at most {self.action_agent_task_max_retries} times\033[0m"
+                f"\033[35mStarting task {next_task} for at most {
+                    self.action_agent_task_max_retries} times\033[0m"
             )
             messages, reward, done, info = self.rollout(
                 task=next_task,
@@ -404,8 +416,10 @@ class Voyager:
             )
             self.curriculum_agent.update_exploration_progress(info)
             print(
-                f"\033[35mCompleted tasks: {', '.join(self.curriculum_agent.completed_tasks)}\033[0m"
+                f"\033[35mCompleted tasks: {
+                    ', '.join(self.curriculum_agent.completed_tasks)}\033[0m"
             )
             print(
-                f"\033[35mFailed tasks: {', '.join(self.curriculum_agent.failed_tasks)}\033[0m"
+                f"\033[35mFailed tasks: {
+                    ', '.join(self.curriculum_agent.failed_tasks)}\033[0m"
             )
